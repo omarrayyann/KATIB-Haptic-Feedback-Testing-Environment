@@ -28,8 +28,8 @@ blue = (0, 0, 255)
 radius = 10
 
 # 192+(1727-192)/3.0
-xl = 700  # (1727-192)/3.0
-xs = 450
+xl = 1050  # (1727-192)/3.0
+xs = 125
 # 109+(971-109)/5
 yl = 700
 ys = 100
@@ -37,6 +37,7 @@ imgIndex = 0
 delim = ' '
 lengthOfarr = 0
 flag = 1
+letterNames = []
 # Serial Setup
 
 # gSer=serial.Serial('/dev/ttyACM0','115200')
@@ -45,6 +46,15 @@ flag = 1
 # serL.write("r\n")
 # serR.write("r\n")
 # time.sleep(6.1)
+
+
+# Variables to change:
+distanceBetweenPoints = 20
+currentLoadedDistance = 20
+hooks = False
+
+
+font = pygame.font.Font('freesansbold.ttf', 20)
 
 
 def invKin(x_in, y_in):
@@ -101,9 +111,10 @@ cwd = os.getcwd()
 Data_path = cwd+"/letters"
 letter_paths = os.listdir(Data_path)
 print(letter_paths)
-for file_name in letter_paths:
 
-    with open(Data_path+'/'+"Ayn.csv", 'r') as csvfile:
+for file_name in letter_paths:
+    letterNames.append(file_name[:len(file_name) - 4])
+    with open(Data_path+'/'+file_name, 'r') as csvfile:
         coords = csv.reader(csvfile, delimiter=delim)
         # print(coords)    		#header = next(plots)
         x = []
@@ -139,12 +150,25 @@ for file_name in letter_paths:
 magnet = pygame.image.load('clear.png').convert()
 magnet = pygame.transform.scale(magnet, (30, 30))
 
+
 startMagnetVisualization = False
 
 
 def magnet_visualizer(x, y):
     newPoint = pygame.draw.circle(screen, (255, 215, 0), (x, y), 10)
 
+
+plusDistance = pygame.image.load('plus.png').convert()
+plusDistance = pygame.transform.scale(plusDistance, (40, 40))
+plusDistance = pygame.transform.rotate(plusDistance, 180)
+rectPlusDistance = plusDistance.get_rect()
+rectPlusDistance.center = (1410, 180)
+
+minusDistance = pygame.image.load('minus.png').convert()
+minusDistance = pygame.transform.scale(minusDistance, (40, 40))
+minusDistance = pygame.transform.rotate(minusDistance, 180)
+rectMinusDistance = minusDistance.get_rect()
+rectMinusDistance.center = (1340, 180)
 
 clear = pygame.image.load('clear.png').convert()
 clear = pygame.transform.scale(clear, (50, 50))
@@ -158,12 +182,6 @@ load = pygame.transform.rotate(load, 180)
 rectLoad = load.get_rect()
 rectLoad.center = (50, 180)
 
-startL = pygame.image.load('start.png').convert()
-startL = pygame.transform.scale(startL, (50, 50))
-startL = pygame.transform.rotate(startL, 180)
-rectStart = startL.get_rect()
-rectStart.center = (50, 240)
-
 closeL = pygame.image.load('exit.png').convert()
 closeL = pygame.transform.scale(closeL, (50, 50))
 # closeL=pygame.transform.rotate(closeL,180)
@@ -176,11 +194,10 @@ ResetMs = pygame.transform.scale(ResetMs, (50, 50))
 rectResetMs = ResetMs.get_rect()
 rectResetMs.center = (width-50, 200)
 
-screen.blit(clear, rectClear)
-screen.blit(load, rectLoad)
-screen.blit(startL, rectStart)
-# screen.blit(closeL, rectClose)
-# screen.blit(ResetMs, rectResetMs)
+rectApply = pygame.Rect(1240, 350, 300, 40)
+rectStart = pygame.Rect(1240, 400, 300, 40)
+rectNextLetter = pygame.Rect(1240, 450, 300, 40)
+rectPreviousLetter = pygame.Rect(1240, 500, 300, 40)
 
 
 x = []
@@ -230,110 +247,6 @@ y = []
 # #gSer.write(str.encode('M3 S10\n'))
 # #gSer.write(str.encode('G0 X0 Y0\n' ))
 
-
-# # Rounds to the nearest integer. Very useful.
-# def rint(x): return int(round(x, 0))
-
-
-# class Bar(pygame.sprite.Sprite):
-#     def __init__(self, options, width, height):
-
-#         # Store these useful variables to the class
-#         self.options = options
-#         self.width = width
-#         self.height = height
-
-#         # The slider
-#         self.slider = pygame.image.load('33759.png')
-#         self.slider_rect = self.slider.get_rect()
-
-#         # The background "green" rectangles, mostly for decoration
-#         self.back = []
-#         objectHeight = (height-options*6)/(options-1)
-#         self.backHeight = objectHeight
-
-#         for index in range(options-1):
-#             self.back.append(pygame.Rect(
-#                 (0, rint((6*index+6)+index*objectHeight)), (width, rint(objectHeight))))
-
-#         # The foreground "blue" rectangles, mostly for decoration
-#         self.fore = []
-
-#         for index in range(options):
-#             self.fore.append(pygame.Rect(
-#                 (0, rint(index*(objectHeight+6))), (width, 6)))
-
-#         # Get list of possible "snaps", which the slider can be dragged to
-#         self.snaps = []
-
-#         for index in range(options):
-#             self.snaps.append((width/2, 3+(index*(objectHeight+6))))
-
-#         # A simple variable to tell you which option has been chosen
-#         self.chosen = 0
-
-#         # Generate the image surface, then render the bar to it
-#         self.image = pygame.Surface((width, height))
-#         self.rect = self.image.get_rect()
-#         self.render()
-
-#         self.focus = False
-
-#     def render(self):
-#         self.image.fill([255, 255, 255])
-
-#         for back in self.back:
-#             pygame.draw.rect(self.image, [255, 255, 255], back)
-
-#         for fore in self.fore:
-#             pygame.draw.rect(self.image, [0, 0, 0], fore)
-
-#         self.image.blit(self.slider, (rint((self.width-self.slider_rect.width)/2),
-#                         rint(self.snaps[self.chosen][1]-(self.slider_rect.height/2))))
-
-#     def draw(self, surface):
-#         surface.blit(self.image, (500, 500))
-
-#     def mouseDown(self, pos):
-#         if self.rect.collidepoint(pos):
-#             self.focus = True
-#             return True
-#         return False
-
-#     def mouseUp(self, pos):
-#         if not self.focus:
-#             return
-
-#         self.focus = False
-
-#         if not self.rect.collidepoint(pos):
-#             return
-
-#         pos = list(pos)
-
-#         # We've made sure the mouse started in our widget (self.focus), and ended in our widget (collidepoint)
-#         # So there is no reason to care about the exact position of the mouse, only where it is relative
-#         # to this widget
-#         pos[0] -= self.rect.x
-#         pos[1] -= self.rect.y
-
-#         # Calculating max distance from a given selection, then comparing that to mouse pos
-#         dis = self.backHeight/2 + 3
-
-#         for index, snap in enumerate(self.snaps):
-#             if abs(snap[1]-pos[1]) <= dis:
-#                 self.chosen = index
-#                 break
-
-#         self.render()
-
-#     def update(self):
-#         pygame.mixer.music.set_volume((self.options-self.chosen)*0.1)
-
-
-# slider = Bar(10, 30, 300)
-# slider.rect.x = 50
-# slider.rect.y = 50
 
 def averagePoint(point1, point2):
     x = (point2[0]+point1[0])/2
@@ -394,19 +307,57 @@ def resample(points, howMany):
     return newPoints
 
 
-# Variables to change:
-distanceBetweenPoints = 20
-hooks = False
-
 try:
     while True:
+        textDistance = font.render(
+            'Distance Between Points: ' + str(distanceBetweenPoints), True, (255, 255, 255), (0, 0, 0))
+
+        rectStartDistance = pygame.Rect(1200, 50, 400, 1000)
+        pygame.draw.rect(screen, (0, 0, 0), rectStartDistance, 0, 10)
+
+        textFeedRate = font.render(
+            'Feed Rate: 23', True, (255, 255, 255), (0, 0, 0))
+
+        textApply = font.render(
+            'Apply Changes', True, (0, 0, 0), (255, 255, 255))
+
+        textStart = font.render(
+            'Start', True, (0, 0, 0), (255, 255, 255))
+
+        textPrevious = font.render(
+            'Previous Letter: ' + letterNames[(imgIndex+15*len(letterNames)-1) % len(letterNames)], True, (0, 0, 0), (255, 255, 255))
+
+        textCurrent = font.render(
+            'Current Letter: ' + letterNames[(imgIndex+15*len(letterNames)) % len(letterNames)], True, (255, 255, 255), (0, 0, 0))
+
+        textNext = font.render(
+            'Next Letter: ' + letterNames[(imgIndex+1) % len(letter_paths)], True, (0, 0, 0), (255, 255, 255))
+
+        if (currentLoadedDistance != distanceBetweenPoints):
+            textApply = font.render(
+                'Apply Changes', True, (0, 0, 0), (255, 100, 100))
+            pygame.draw.rect(screen, (255, 100, 100), rectApply, 0, 10)
+            screen.blit(textApply, (1320, 355))
+        else:
+            pygame.draw.rect(screen, white, rectApply, 0, 10)
+            screen.blit(textApply, (1320, 355))
 
         rect = pygame.draw.rect(screen, white, (xs, ys, xl, yl), 3, 10)
         pygame.draw.circle(screen, color, (int(xs), int(ys)), radius)
         pygame.draw.circle(screen, blue, (int(xs+xl), int(ys+yl)), radius)
         screen.blit(clear, rectClear)
         screen.blit(load, rectLoad)
-        screen.blit(startL, rectStart)
+        screen.blit(plusDistance, rectPlusDistance)
+        screen.blit(minusDistance, rectMinusDistance)
+        screen.blit(textDistance, (1240, 100))
+        screen.blit(textFeedRate, (1240, 250))
+        pygame.draw.rect(screen, white, rectStart, 0, 10)
+        screen.blit(textStart, (1367, 406))
+        pygame.draw.rect(screen, white, rectNextLetter, 0, 10)
+        screen.blit(textNext, (1270, 457))
+        pygame.draw.rect(screen, white, rectPreviousLetter, 0, 10)
+        screen.blit(textPrevious, (1270, 508))
+        screen.blit(textCurrent,  (1270, 559))
 
         # slider.update()
         # slider.draw(screen)
@@ -446,37 +397,22 @@ try:
                 time.sleep(0.05)
                 drowOn = False
                 screen.fill(black)
-# Load check
 
-            if e.type == pygame.MOUSEBUTTONDOWN and rectLoad.collidepoint(e.pos):
-                pygame.draw.rect(screen, white, rectLoad, 5)
+# Plus Distance check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectPlusDistance.collidepoint(e.pos):
+                distanceBetweenPoints += 1
+                pygame.display.update()
+
+# Minus Distance check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectMinusDistance.collidepoint(e.pos):
+                distanceBetweenPoints -= 1
+                pygame.display.update()
+
+# Apply check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectApply.collidepoint(e.pos):
                 pygame.display.flip()
                 time.sleep(0.05)
-                pygame.draw.rect(screen, black, rectStart, 5)
-                imgIndex = (imgIndex+1) % len(letter_paths)
-                # screen.blit(letterImg[imgIndex],rectImg)
-                pygame.draw.rect(screen, black, rectLoad, 5)
-                pygame.display.flip()
-                pygame.draw.rect(screen, black, (xs, ys, xl, yl))
-                rect = pygame.draw.rect(screen, white, (xs, ys, xl, yl), 5)
 
-                # changing points
-                newLettersX, newLettersY = alterPoints(
-                    lettersX[imgIndex], lettersY[imgIndex], distanceBetweenPoints)
-
-                xp = copy.copy(newLettersX)
-                yp = copy.copy(newLettersY)
-                lengthOfarr = len(xp)
-                newPoint = pygame.draw.circle(
-                    screen, white, (xp.pop(0), yp.pop(0)), 20)
-                flag = 1
-                drowOn = False
-                drow_on = False
-
-                # pygame.display.flip()
-# Start check
-
-            if e.type == pygame.MOUSEBUTTONDOWN and rectStart.collidepoint(e.pos):
                 pygame.draw.rect(screen, white, rectStart, 5)
                 pygame.display.flip()
                 time.sleep(0.05)
@@ -494,6 +430,77 @@ try:
                     screen, (200, 0, 0), (xp.pop(0), yp.pop(0)), 10)
                 pygame.display.flip()
                 drowOn = True
+                currentLoadedDistance = distanceBetweenPoints
+                # screen.fill(black)
+
+# Next check
+
+            if e.type == pygame.MOUSEBUTTONDOWN and rectNextLetter.collidepoint(e.pos):
+
+                pygame.display.flip()
+                imgIndex = (imgIndex+1) % len(letter_paths)
+                # screen.blit(letterImg[imgIndex],rectImg)
+                pygame.display.flip()
+                pygame.draw.rect(screen, black, (xs, ys, xl, yl))
+                rect = pygame.draw.rect(screen, white, (xs, ys, xl, yl), 5)
+
+                # changing points
+                newLettersX, newLettersY = alterPoints(
+                    lettersX[imgIndex], lettersY[imgIndex], distanceBetweenPoints)
+
+                xp = copy.copy(newLettersX)
+                yp = copy.copy(newLettersY)
+                lengthOfarr = len(xp)
+                newPoint = pygame.draw.circle(
+                    screen, white, (xp.pop(0), yp.pop(0)), 20)
+                flag = 1
+                drowOn = False
+                drow_on = False
+                currentLoadedDistance = distanceBetweenPoints
+                # pygame.display.flip()
+
+# Previous check
+
+            if e.type == pygame.MOUSEBUTTONDOWN and rectPreviousLetter.collidepoint(e.pos):
+
+                pygame.display.flip()
+                imgIndex = (imgIndex-1) % len(letter_paths)
+                # screen.blit(letterImg[imgIndex],rectImg)
+                pygame.display.flip()
+                pygame.draw.rect(screen, black, (xs, ys, xl, yl))
+                rect = pygame.draw.rect(screen, white, (xs, ys, xl, yl), 5)
+
+                # changing points
+                newLettersX, newLettersY = alterPoints(
+                    lettersX[imgIndex], lettersY[imgIndex], distanceBetweenPoints)
+
+                xp = copy.copy(newLettersX)
+                yp = copy.copy(newLettersY)
+                lengthOfarr = len(xp)
+                newPoint = pygame.draw.circle(
+                    screen, white, (xp.pop(0), yp.pop(0)), 20)
+                flag = 1
+                drowOn = False
+                drow_on = False
+                currentLoadedDistance = distanceBetweenPoints
+                # pygame.display.flip()
+
+# Start check
+
+            if e.type == pygame.MOUSEBUTTONDOWN and rectStart.collidepoint(e.pos):
+
+                # changing points
+                newLettersX, newLettersY = alterPoints(
+                    lettersX[imgIndex], lettersY[imgIndex], distanceBetweenPoints)
+
+                xp = copy.copy(newLettersX)
+                yp = copy.copy(newLettersY)
+                lengthOfarr = len(xp)
+                newPoint = pygame.draw.circle(
+                    screen, (200, 0, 0), (xp.pop(0), yp.pop(0)), 10)
+                pygame.display.flip()
+                drowOn = True
+                currentLoadedDistance = distanceBetweenPoints
                 # screen.fill(black)
 # Drawing check
 
