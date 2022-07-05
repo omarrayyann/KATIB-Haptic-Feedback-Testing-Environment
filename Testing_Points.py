@@ -7,6 +7,8 @@ import csv
 import copy
 import serial
 import math
+from scipy import interpolate
+import numpy as np
 
 # Electromagnet Setup
 force_pin = 18
@@ -26,6 +28,15 @@ white = (255, 255, 255)
 black = (0, 0, 0)
 blue = (0, 0, 255)
 radius = 10
+
+points = []
+raw_points = []
+smooth_points = []
+new_smooth_points = []
+newPoints = []
+angles = []
+KMCP = []
+
 
 # 192+(1727-192)/3.0
 xl = 1050  # (1727-192)/3.0
@@ -49,9 +60,32 @@ letterNames = []
 
 
 # Variables to change:
+
+# Equal Distance
 distanceBetweenPoints = 20
 currentLoadedDistance = 20
-hooks = False
+makeEqualDistance = True
+loadedEqualDistance = True
+
+# V_Fill
+makeVFill = True
+loadedVFill = True
+MinimumAngleInDegrees = 0
+currentLoadedMinimumAngleInDegrees = 0
+
+# B_Spline
+numberOfInterpolatedPoints = 75
+currentLoadedNumberOfInterpolatedPoints = 75
+makeBSpline = True
+loadedMakeBSpline = True
+
+# Interpolate before equal distance?
+makeMorePoints = False
+loadedMorePoints = False
+
+# Remove Hooks
+removeHooks = False
+loadededRemoveHooks = False
 
 
 font = pygame.font.Font('freesansbold.ttf', 20)
@@ -160,15 +194,50 @@ def magnet_visualizer(x, y):
 
 plusDistance = pygame.image.load('plus.png').convert()
 plusDistance = pygame.transform.scale(plusDistance, (40, 40))
-plusDistance = pygame.transform.rotate(plusDistance, 180)
 rectPlusDistance = plusDistance.get_rect()
 rectPlusDistance.center = (1410, 180)
 
 minusDistance = pygame.image.load('minus.png').convert()
 minusDistance = pygame.transform.scale(minusDistance, (40, 40))
-minusDistance = pygame.transform.rotate(minusDistance, 180)
 rectMinusDistance = minusDistance.get_rect()
 rectMinusDistance.center = (1340, 180)
+
+toggleDistance = pygame.image.load('off.png').convert()
+toggleDistance = pygame.transform.scale(toggleDistance, (50, 50))
+rectToggleDistance = toggleDistance.get_rect()
+rectToggleDistance.center = (1242, 160)
+
+toggleMinimumAngle = pygame.image.load('off.png').convert()
+toggleMinimumAngle = pygame.transform.scale(toggleDistance, (50, 50))
+rectToggleMinimumAngle = toggleMinimumAngle.get_rect()
+rectToggleMinimumAngle.center = (1242, 460)
+
+toggleInterpolatedPoints = pygame.image.load('off.png').convert()
+toggleInterpolatedPoints = pygame.transform.scale(
+    toggleInterpolatedPoints, (50, 50))
+rectToggleInterpolatedPoints = toggleInterpolatedPoints.get_rect()
+rectToggleInterpolatedPoints.center = (1242, 310)
+
+plusInterpolated = pygame.image.load('plus.png').convert()
+plusInterpolated = pygame.transform.scale(plusInterpolated, (40, 40))
+rectPlusInterpolated = plusInterpolated.get_rect()
+rectPlusInterpolated.center = (1410, 330)
+
+minusInterpolated = pygame.image.load('minus.png').convert()
+minusInterpolated = pygame.transform.scale(minusInterpolated, (40, 40))
+minusInterpolated = pygame.transform.rotate(minusInterpolated, 180)
+rectMinusInterpolated = minusInterpolated.get_rect()
+rectMinusInterpolated.center = (1340, 330)
+
+plusMinimumAngle = pygame.image.load('plus.png').convert()
+plusMinimumAngle = pygame.transform.scale(plusMinimumAngle, (40, 40))
+rectPlusMinimumAngle = plusMinimumAngle.get_rect()
+rectPlusMinimumAngle.center = (1410, 480)
+
+minusMinimumAngle = pygame.image.load('minus.png').convert()
+minusMinimumAngle = pygame.transform.scale(minusInterpolated, (40, 40))
+rectMinusMinimumAngle = minusMinimumAngle.get_rect()
+rectMinusMinimumAngle.center = (1340, 480)
 
 clear = pygame.image.load('clear.png').convert()
 clear = pygame.transform.scale(clear, (50, 50))
@@ -194,10 +263,10 @@ ResetMs = pygame.transform.scale(ResetMs, (50, 50))
 rectResetMs = ResetMs.get_rect()
 rectResetMs.center = (width-50, 200)
 
-rectApply = pygame.Rect(1240, 350, 300, 40)
-rectStart = pygame.Rect(1240, 400, 300, 40)
-rectNextLetter = pygame.Rect(1240, 450, 300, 40)
-rectPreviousLetter = pygame.Rect(1240, 500, 300, 40)
+rectApply = pygame.Rect(1240, 550, 300, 40)
+rectStart = pygame.Rect(1240, 600, 300, 40)
+rectNextLetter = pygame.Rect(1240, 650, 300, 40)
+rectPreviousLetter = pygame.Rect(1240, 700, 300, 40)
 
 
 x = []
@@ -268,25 +337,97 @@ def equalDisatantPoints(points, d):
     return newPoints
 
 
+def remove_duplicates(points):
+    global minDist
+    clean = points
+    for i in range(len(points) - 2, 0, -1):
+        if (distance(points[i], points[i+1]) < minDist):
+            # print("removed something haha")
+            clean.remove(points[i])
+            # print(len(clean))
+    return clean
+
+
+def calculate_angles(points):
+    angles = []
+    for i in range(len(points) - 1):
+        delta_x = points[i+1][0] - points[i][0]
+        # print(delta_x)
+        delta_y = points[i+1][1] - points[i][1]
+        # print(delta_y)
+        theta = math.atan2(delta_y, delta_x)
+        angles.append(theta)
+        # print(theta)
+    return angles
+
+
+def fill_V(points):
+    angles = calculate_angles(points)
+    T = (MinimumAngleInDegrees)*math.pi / 180
+    DELTAS = []
+    V = []
+    V.append(points[0])
+    DELTAS.append(angles[1] - angles[0])
+    DELTAS.append(angles[2] - angles[1])
+    for i in range(2, len(angles) - 1):
+        delta_angles = angles[i+1] - angles[i]
+        DELTAS.append(delta_angles)
+        if (DELTAS[i] < DELTAS[i - 1] < DELTAS[i - 2]) and math.fabs(DELTAS[i - 1]) > T and points[i - 1] not in V:
+            V.append(points[i - 1])
+        elif (DELTAS[i] > DELTAS[i - 1] > DELTAS[i - 2]) and math.fabs(DELTAS[i - 1]) > T and points[i - 1] not in V:
+            V.append(points[i - 1])
+        elif (math.fabs(DELTAS[i-1]) > math.pi / 2) and points[i - 1] not in V:
+            V.append(points[i - 1])
+    V.append(points[len(points) - 1])
+    return V
+
+
+def B_spline(waypoints):
+    x = []
+    y = []
+    for point in waypoints:
+        x.append(point[0])
+        y.append(point[1])
+    print(len(waypoints))
+    tck, *rest = interpolate.splprep([x, y])
+    u = np.linspace(0, 1, num=75)
+    smooth = interpolate.splev(u, tck)
+    x_smooth, y_smooth = smooth
+    strings = []
+    newPoints = []
+    for (x, y) in zip(x_smooth, y_smooth):
+        strings.append(str(x / 800) + " " + str(y / 800))
+        newPoints.append((x, y))
+    return strings, newPoints
+    #         for (x, y) in zip(x_smooth, y_smooth):
+    #             smooth.append((x, y))
+
+
 def alterPoints(letterX, letterY, distanceBetweenPoints):
-    print("AAAAAA")
     points = []
     for i in range(len(letterX)):
         newPoint = [letterX[i], letterY[i]]
         points.append(newPoint)
 
-    # Increasing number of points
-    resampledData = resample(points, 2)
+    if (makeVFill):
+        points = fill_V(points)
 
-    # Equdistant points
-    edualdistant_points = equalDisatantPoints(
-        resampledData, distanceBetweenPoints)
+    if (makeBSpline):
+        strings, points = B_spline(points)
+
+    if (makeEqualDistance):
+        if (makeMorePoints):
+            points = resample(points, 1)
+        points = equalDisatantPoints(
+            points, distanceBetweenPoints)
+
+    finalPoints = points
 
     xPoints = []
     yPoints = []
-    for i in range(len(edualdistant_points)):
-        xPoints.append(edualdistant_points[i][0])
-        yPoints.append(edualdistant_points[i][1])
+    for i in range(len(finalPoints)):
+        xPoints.append(finalPoints[i][0])
+        yPoints.append(finalPoints[i][1])
 
     return xPoints, yPoints
 
@@ -309,14 +450,37 @@ def resample(points, howMany):
 
 try:
     while True:
+        if (makeEqualDistance):
+            toggleDistance = pygame.image.load('on.png').convert()
+        else:
+            toggleDistance = pygame.image.load('off.png').convert()
+        toggleDistance = pygame.transform.scale(toggleDistance, (50, 50))
+
+        if (makeVFill):
+            toggleMinimumAngle = pygame.image.load('on.png').convert()
+        else:
+            toggleMinimumAngle = pygame.image.load('off.png').convert()
+        toggleMinimumAngle = pygame.transform.scale(
+            toggleMinimumAngle, (50, 50))
+
+        if (makeBSpline):
+            toggleInterpolatedPoints = pygame.image.load('on.png').convert()
+        else:
+            toggleInterpolatedPoints = pygame.image.load('off.png').convert()
+        toggleInterpolatedPoints = pygame.transform.scale(
+            toggleInterpolatedPoints, (50, 50))
+
         textDistance = font.render(
             'Distance Between Points: ' + str(distanceBetweenPoints), True, (255, 255, 255), (0, 0, 0))
 
         rectStartDistance = pygame.Rect(1200, 50, 400, 1000)
         pygame.draw.rect(screen, (0, 0, 0), rectStartDistance, 0, 10)
 
-        textFeedRate = font.render(
-            'Feed Rate: 23', True, (255, 255, 255), (0, 0, 0))
+        textNumberOfInterpolated = font.render(
+            'Number of Interpolated Points : ' + str(numberOfInterpolatedPoints), True, (255, 255, 255), (0, 0, 0))
+
+        textMinimumAngle = font.render(
+            'Minimum Angle : ' + str(MinimumAngleInDegrees) + "°", True, (255, 255, 255), (0, 0, 0))
 
         textApply = font.render(
             'Apply Changes', True, (0, 0, 0), (255, 255, 255))
@@ -333,31 +497,43 @@ try:
         textNext = font.render(
             'Next Letter: ' + letterNames[(imgIndex+1) % len(letter_paths)], True, (0, 0, 0), (255, 255, 255))
 
-        if (currentLoadedDistance != distanceBetweenPoints):
+        if (currentLoadedDistance != distanceBetweenPoints) or (currentLoadedNumberOfInterpolatedPoints != numberOfInterpolatedPoints) or (currentLoadedMinimumAngleInDegrees != MinimumAngleInDegrees) or (loadedEqualDistance != makeEqualDistance) or (loadededRemoveHooks != removeHooks) or (loadedMorePoints != makeMorePoints) or (loadedMakeBSpline != makeBSpline) or (loadedVFill != makeVFill):
             textApply = font.render(
                 'Apply Changes', True, (0, 0, 0), (255, 100, 100))
             pygame.draw.rect(screen, (255, 100, 100), rectApply, 0, 10)
-            screen.blit(textApply, (1320, 355))
+            screen.blit(textApply, (1320, 555))
         else:
             pygame.draw.rect(screen, white, rectApply, 0, 10)
-            screen.blit(textApply, (1320, 355))
+            screen.blit(textApply, (1320, 555))
 
         rect = pygame.draw.rect(screen, white, (xs, ys, xl, yl), 3, 10)
         pygame.draw.circle(screen, color, (int(xs), int(ys)), radius)
         pygame.draw.circle(screen, blue, (int(xs+xl), int(ys+yl)), radius)
         screen.blit(clear, rectClear)
         screen.blit(load, rectLoad)
+
         screen.blit(plusDistance, rectPlusDistance)
         screen.blit(minusDistance, rectMinusDistance)
-        screen.blit(textDistance, (1240, 100))
-        screen.blit(textFeedRate, (1240, 250))
+        screen.blit(plusInterpolated, rectPlusInterpolated)
+        screen.blit(minusInterpolated, rectMinusInterpolated)
+        screen.blit(plusMinimumAngle, rectPlusMinimumAngle)
+        screen.blit(minusMinimumAngle, rectMinusMinimumAngle)
+
+        screen.blit(toggleDistance, rectToggleDistance)
+        screen.blit(toggleInterpolatedPoints, rectToggleInterpolatedPoints)
+        screen.blit(toggleMinimumAngle, rectToggleMinimumAngle)
+
+        screen.blit(textDistance, (1220, 100))
+        screen.blit(textNumberOfInterpolated, (1220, 250))
+        screen.blit(textMinimumAngle, (1220, 400))
+
         pygame.draw.rect(screen, white, rectStart, 0, 10)
-        screen.blit(textStart, (1367, 406))
+        screen.blit(textStart, (1367, 606))
         pygame.draw.rect(screen, white, rectNextLetter, 0, 10)
-        screen.blit(textNext, (1270, 457))
+        screen.blit(textNext, (1270, 657))
         pygame.draw.rect(screen, white, rectPreviousLetter, 0, 10)
-        screen.blit(textPrevious, (1270, 508))
-        screen.blit(textCurrent,  (1270, 559))
+        screen.blit(textPrevious, (1270, 708))
+        screen.blit(textCurrent,  (1270, 759))
 
         # slider.update()
         # slider.draw(screen)
@@ -408,6 +584,41 @@ try:
                 distanceBetweenPoints -= 1
                 pygame.display.update()
 
+# Plus Interpolated check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectPlusInterpolated.collidepoint(e.pos):
+                numberOfInterpolatedPoints += 1
+                pygame.display.update()
+
+# Minus Interpolated check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectMinusInterpolated.collidepoint(e.pos):
+                numberOfInterpolatedPoints -= 1
+                pygame.display.update()
+
+# Plus Minimum Angle check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectPlusMinimumAngle.collidepoint(e.pos):
+                MinimumAngleInDegrees += 1
+                pygame.display.update()
+
+# Minus Minimum Angle check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectMinusMinimumAngle.collidepoint(e.pos):
+                MinimumAngleInDegrees -= 1
+                pygame.display.update()
+
+# Toggle Equal Distance
+            if e.type == pygame.MOUSEBUTTONDOWN and rectToggleDistance.collidepoint(e.pos):
+                makeEqualDistance = not makeEqualDistance
+                pygame.display.update()
+
+# Plus Interpolated check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectToggleInterpolatedPoints.collidepoint(e.pos):
+                makeBSpline = not makeBSpline
+                pygame.display.update()
+
+# Minus Interpolated check
+            if e.type == pygame.MOUSEBUTTONDOWN and rectToggleMinimumAngle.collidepoint(e.pos):
+                makeVFill = not makeVFill
+                pygame.display.update()
+
 # Apply check
             if e.type == pygame.MOUSEBUTTONDOWN and rectApply.collidepoint(e.pos):
                 pygame.display.flip()
@@ -431,6 +642,14 @@ try:
                 pygame.display.flip()
                 drowOn = True
                 currentLoadedDistance = distanceBetweenPoints
+                currentLoadedNumberOfInterpolatedPoints = numberOfInterpolatedPoints
+                currentLoadedMinimumAngleInDegrees = MinimumAngleInDegrees
+                loadedEqualDistance = makeEqualDistance
+                loadedRemoveHooks = removeHooks
+                loadedMorePoints = makeMorePoints
+                loadedMakeBSplin = makeBSpline
+                loadedVFill = makeVFill
+
                 # screen.fill(black)
 
 # Next check
